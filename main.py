@@ -22,6 +22,15 @@ if largest.size != 0:
 
     boxes = splitBoxes(img_warp)
 
+    model = load_model('model.h5')
+
+    nums = []
     for box in boxes:
-        cv.imshow('a', box)
-        cv.waitKey(0)
+        img = np.asarray(box)
+        img = img[4:img.shape[0] - 4, 4:img.shape[1] -4]
+        img = cv.resize(img, (28, 28))
+        img = img / 255
+        img = img.reshape(1, 28, 28, 1)
+
+        predictions = model.predict(img)
+    
