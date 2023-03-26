@@ -3,6 +3,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Conv2D, Dropout, Flatten, MaxPool2D
 
 (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+tf.keras.datasets.mn
 
 # Reshaping the array to 4-dims so that it can work with the Keras API
 x_train = x_train.reshape(x_train.shape[0], 28, 28, 1)

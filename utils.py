@@ -6,7 +6,7 @@ def preprocess(h, w, img):
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     img_blur = cv.GaussianBlur(img_gray, (5,5), 1)
     img_thresh = cv.adaptiveThreshold(img_blur, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
-    return img,img_thresh
+    return img, img_thresh
 
 def findLargestArea(contours):
     biggest = np.array([])
