@@ -1,102 +1,70 @@
-import pandas as pd
-from keras.utils.np_utils import to_categorical # convert to one-hot-encoding
+import tensorflow as tf
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D
-from keras.optimizers import RMSprop
-from keras.preprocessing.image import ImageDataGenerator
-from keras.callbacks import ReduceLROnPlateau
-from sklearn.model_selection import train_test_split
-from keras.callbacks import EarlyStopping
+from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D, Activation
+from sklearn.preprocessing import LabelBinarizer
+from keras.optimizers import Adam
+from sklearn.metrics import classification_report
 
-train = pd.read_csv("digit_data/train.csv")
-test = pd.read_csv("digit_data/test.csv")
-
-Y_train = train["label"]
-
-# Drop 'label' column
-X_train = train.drop(labels = ["label"],axis = 1) 
-
-# free some space
-del train 
-
-# Normalize the data
-X_train = X_train / 255.0
-test = test / 255.0
-
-# Reshape image in 3 dimensions (height = 28px, width = 28px , canal = 1)
-X_train = X_train.values.reshape(-1,28,28,1)
-test = test.values.reshape(-1,28,28,1)
-
-# Encode labels to one hot vectors (ex : 2 -> [0,0,1,0,0,0,0,0,0,0])
-Y_train = to_categorical(Y_train, num_classes = 10)
-
-# Set the random seed
-random_seed = 2
-
-# Split the train and the validation set for the fitting
-X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size = 0.1, random_state=random_seed)
-
-# Set the CNN model 
-# my CNN architechture is In -> [[Conv2D->relu]*2 -> MaxPool2D -> Dropout]*2 -> Flatten -> Dense -> Dropout -> Out
 
 model = Sequential()
-model.add(Conv2D(filters = 32, kernel_size = (5,5),padding = 'Same', 
-                 activation ='relu', input_shape = (28,28,1)))
-model.add(Conv2D(filters = 32, kernel_size = (5,5),padding = 'Same', 
-                 activation ='relu'))
-model.add(MaxPool2D(pool_size=(2,2)))
-model.add(Dropout(0.25))
-model.add(Conv2D(filters = 64, kernel_size = (3,3),padding = 'Same', 
-                 activation ='relu'))
-model.add(Conv2D(filters = 64, kernel_size = (3,3),padding = 'Same', 
-                 activation ='relu'))
-model.add(MaxPool2D(pool_size=(2,2), strides=(2,2)))
-model.add(Dropout(0.25))
+# first set of CONV => RELU => POOL layers
+model.add(Conv2D(32, (5, 5), padding="same",input_shape=(28, 28, 1)))
+model.add(Activation("relu"))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+# second set of CONV => RELU => POOL layers
+model.add(Conv2D(32, (3, 3), padding="same"))
+model.add(Activation("relu"))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+# first set of FC => RELU layers
 model.add(Flatten())
-model.add(Dense(256, activation = "relu"))
+model.add(Dense(64))
+model.add(Activation("relu"))
 model.add(Dropout(0.5))
-model.add(Dense(10, activation = "softmax"))
+# second set of FC => RELU layers
+model.add(Dense(64))
+model.add(Activation("relu"))
+model.add(Dropout(0.5))
+# softmax classifier
+model.add(Dense(10))
+model.add(Activation("softmax"))
 
-# Define the optimizer
-optimizer = RMSprop(learning_rate=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+# add a channel (i.e., grayscale) dimension to the digits
+trainData = x_train.reshape((x_train.shape[0], 28, 28, 1))
+testData = x_test.reshape((x_test.shape[0], 28, 28, 1))
 
-# Compile the model
-model.compile(optimizer = optimizer , loss = "categorical_crossentropy", metrics=["accuracy"])
+# scale data to the range of [0, 1]
+trainData = trainData.astype("float32") / 255.0
+testData = testData.astype("float32") / 255.0
+# convert the labels from integers to vectors
+le = LabelBinarizer()
+trainLabels = le.fit_transform(y_train)
+testLabels = le.transform(y_test)
 
-# Set a learning rate annealer
-learning_rate_reduction = ReduceLROnPlateau(monitor='val_loss', 
-                                            patience=3, 
-                                            verbose=1, 
-                                            factor=0.5, 
-                                            min_lr=0.00001)
+INIT_LR = 1e-3
+EPOCHS = 10
+BS = 128
 
-epochs = 30 # Turn epochs to 30 to get 0.9967 accuracy
-batch_size = 86
+opt = Adam(lr=INIT_LR)
 
-# With data augmentation to prevent overfitting (accuracy 0.99286)
-datagen = ImageDataGenerator(
-        featurewise_center=False,  # set input mean to 0 over the dataset
-        samplewise_center=False,  # set each sample mean to 0
-        featurewise_std_normalization=False,  # divide inputs by std of the dataset
-        samplewise_std_normalization=False,  # divide each input by its std
-        zca_whitening=False,  # apply ZCA whitening
-        rotation_range=10,  # randomly rotate images in the range (degrees, 0 to 180)
-        zoom_range = 0.1, # Randomly zoom image 
-        width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
-        height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
-        horizontal_flip=False,  # randomly flip images
-        vertical_flip=False)  # randomly flip images
-datagen.fit(X_train)
+model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
-earlystopper = EarlyStopping(monitor='val_loss', min_delta=0,
-                             patience=1, verbose=1, mode='auto')
+# train the network
+print("[INFO] training network...")
+H = model.fit(
+	trainData, trainLabels,
+	validation_data=(testData, testLabels),
+	batch_size=BS,
+	epochs=EPOCHS,
+	verbose=1)
 
-# Fit the model
-history = model.fit(datagen.flow(X_train,Y_train, batch_size=batch_size),
-                              epochs = epochs, validation_data = (X_val,Y_val),
-                              verbose = 2, steps_per_epoch=X_train.shape[0] // batch_size
-                              , callbacks=[learning_rate_reduction, earlystopper])
-
-test_loss, test_acc = model.evaluate(X_val, Y_val)
-print('\nTest accuracy:', test_acc)
-model.save('new_model.h5')
+# evaluate the network
+print("[INFO] evaluating network...")
+predictions = model.predict(testData)
+print(classification_report(
+	testLabels.argmax(axis=1),
+	predictions.argmax(axis=1),
+	target_names=[str(x) for x in le.classes_]))
+# serialize the model to disk
+print("[INFO] serializing digit model...")
+model.save('another_model.h5')
